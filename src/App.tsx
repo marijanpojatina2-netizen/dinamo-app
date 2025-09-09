@@ -283,7 +283,7 @@ useEffect(() => {
   if (!hub2dPayload || !hub2dPayload.trim()) return;
   if (!refsReady) return; // 🔑 čekamo da se refovi stvarno montiraju
 
-  let cancelled = false;
+ 
 
   (async () => {
     const canvas = canvasRef.current!;
@@ -339,7 +339,7 @@ useEffect(() => {
     }
   })();
 
-  return () => { cancelled = true; };
+
 }, [step, hub2dPayload, refsReady]);
 
 

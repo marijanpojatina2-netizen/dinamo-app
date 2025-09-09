@@ -199,19 +199,16 @@ async function waitForRefs(
 const canvasRef = useRef<HTMLCanvasElement | null>(null);
 const barcodeRef = useRef<HTMLDivElement | null>(null);
 
-// signal da su oba refa montirana
-const [refsReady, setRefsReady] = useState(false);
-
 // callback refovi – zovu se kad se elementi pojave / nestanu u DOM-u
 const handleCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
   canvasRef.current = node;
-  setRefsReady(Boolean(node && barcodeRef.current));
+  // setRefsReady(Boolean(node && barcodeRef.current));  // ← makni ovo
 }, []);
 
 const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
   barcodeRef.current = node;
-  setRefsReady(Boolean(node && canvasRef.current));
-}, []);
+  // setRefsReady(Boolean(node && canvasRef.current));   // ← makni ovo
+}, []); 
 
 
   // Scroll to top on each step change (forward/back)

@@ -276,74 +276,55 @@ const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
       setReferenceNumber(String(rnd));
     }
   }, [step, referenceNumber]);
-
-// Crtanje PDF417 — pdf417-generator (ako može) ili bwip-js fallback
+// Crtanje PDF417 — jednostavna, pouzdana varijanta s bwip-js
 useEffect(() => {
   if (step !== Step.Payment) return;
   if (!hub2dPayload || !hub2dPayload.trim()) return;
-  if (!refsReady) return; // 🔑 čekamo da se refovi stvarno montiraju
-
- 
+  if (!refsReady) return; // čekamo da su refovi montirani
 
   (async () => {
-    const canvas = canvasRef.current!;
-    const container = barcodeRef.current!;
+    const canvas = canvasRef.current;
+    const container = barcodeRef.current;
+    if (!canvas) return;
 
-    // pripremi okvir
+    // pripremi platno + uvijek bijela podloga (da se čita i u dark modu)
     const w = 300, h = 150;
-    canvas.style.display = "block";
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    canvas.style.display = 'block';
+    canvas.width = w; 
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
     if (ctx) {
-    ctx.fillStyle = "#ffffff";      // uvijek čista bijela podloga
-    ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
     }
-    container.style.display = "none";
-    container.innerHTML = "";
-
-    // 1) pdf417-generator (ako je kompatibilan)
-    try {
-      const mod: any = await import("pdf417-generator");
-      const lib: any = mod?.default ?? mod;
-      const candidates = [
-        lib?.draw, lib?.render, lib?.drawBarcode, lib?.renderBarcode,
-        lib?.PDF417?.draw, lib?.PDF417?.render,
-        typeof lib === "function" ? lib : null,
-      ].filter(Boolean);
-
-      for (const fn of candidates) {
-        const calls = [
-          () => fn(hub2dPayload, canvas, 3),
-          () => fn(hub2dPayload, canvas, 3, 3),
-          () => fn({ text: hub2dPayload, canvas, scale: 3 }),
-        ];
-        for (const call of calls) {
-          try { call(); return; } catch {}
-        }
-      }
-    } catch {
-      // ignoriramo i idemo na fallback
+    if (container) {
+      container.style.display = 'none'; 
+      container.innerHTML = '';
     }
 
-    // 2) FALLBACK: bwip-js (provjereno radi)
     try {
-      const bwipjs: any = (await import("bwip-js")).default ?? (await import("bwip-js"));
-      await bwipjs.toCanvas(canvas, {
-        bcid: "pdf417",
+      const mod: any = await import('bwip-js');
+      const bwip = mod?.default ?? mod;
+      await bwip.toCanvas(canvas, {
+        bcid: 'pdf417',
         text: hub2dPayload,
-        scale: 2,
+        scale: 3,          // malo veći i čitljiviji
         height: 10,
         includetext: false,
         columns: 6,
       });
-      return;
+      // gotovo ✅
     } catch (e) {
-      console.error("[PDF417/bwip-js] nije uspjelo nacrtati:", e);
+      console.error('[PDF417/bwip-js] greška crtanju:', e);
+      if (ctx) {
+        ctx.fillStyle = '#900';
+        ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+        ctx.fillText('Greška pri crtanju barkoda', 10, 20);
+      }
     }
   })();
-
-
 }, [step, hub2dPayload, refsReady]);
+
 
 // Automatsko slanje emaila + zapis u Google Sheet
 async function sendOrderNotification() {
@@ -941,22 +922,15 @@ useEffect(() => {
                     </div>
 
                     <div className="flex flex-col items-center gap-3">
-                      <div
-                      className="rounded-2xl p-4 border border-black/10 shadow-sm barcode-surface"
-                      style={{ background: "#fff" }}
-                    >
-                     {/* Canvas način */}
-                    <canvas
-                      ref={handleCanvasRef}
-                      className="block bg-white"
-                      style={{ width: 300, height: 150, background: "#fff" }}
-                    />
-                    {/* Fallback: DIV render način */}
-                    <div
-                      ref={handleBarcodeRef}
-                      style={{ width: 300, height: 150, display: "none", background: "#fff" }}
-                    />
-                  </div>
+                      <div className="rounded-2xl p-4 border border-black/10 shadow-sm barcode-surface" style={{ background: '#fff' }}>
+  <canvas
+    ref={handleCanvasRef}
+    className="block bg-white"
+    style={{ width: 300, height: 150, background: '#fff' }}
+  />
+  <div ref={handleBarcodeRef} style={{ width: 300, height: 150, display: 'none', background: '#fff' }} />
+</div>
+
 
                       <div className="text-xs text-black/60 text-center max-w-xs">
                         Skeniraj HUB 2D (PDF417) kod u mobilnoj aplikaciji. Ako skeniranje ne prepozna sve podatke,
@@ -968,7 +942,7 @@ useEffect(() => {
                       </details>
                     </div>
                   </div>
-                </Card>
+                </Card> 
               </div>
             </motion.section>
           )}

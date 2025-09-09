@@ -294,7 +294,10 @@ useEffect(() => {
     canvas.style.display = "block";
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext("2d");
-    if (ctx) { ctx.fillStyle = "#f3f4f6"; ctx.fillRect(0, 0, w, h); }
+    if (ctx) {
+    ctx.fillStyle = "#ffffff";      // uvijek čista bijela podloga
+    ctx.fillRect(0, 0, w, h);
+    }
     container.style.display = "none";
     container.innerHTML = "";
 
@@ -342,13 +345,16 @@ useEffect(() => {
 
 }, [step, hub2dPayload, refsReady]);
 
+// Automatsko slanje emaila + zapis u Google Sheet
+async function sendOrderNotification() {
+  if (!selectedPackage) return;
+  if (emailedRef.current) return;
 
-  // Automatsko slanje emaila preko webhooka (bez UI-a)
-  async function sendOrderNotification() {
-    if (!selectedPackage || !CONFIG.emailWebhook) return;
-    if (emailedRef.current) return;
-    setEmailStatus("sending");
-    try {
+  setEmailStatus("sending");
+
+  try {
+    // --- 1) Email (ako je uključen webhook) ---
+    if (CONFIG.emailWebhook) {
       const email = buildOrderEmail({
         orderId,
         firstName,
@@ -360,22 +366,54 @@ useEffect(() => {
         total,
         referenceNumber,
       });
+
       await fetch(CONFIG.emailWebhook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(email),
       });
-      setEmailStatus("sent");
-      emailedRef.current = true;
-    } catch (e) {
-      console.error("Slanje emaila nije uspjelo:", e);
-      setEmailStatus("error");
     }
-  }
-  useEffect(() => {
-    if (step === Step.Payment && CONFIG.emailWebhook) sendOrderNotification();
-  }, [step]); // namjerno ne stavljamo CONFIG u deps
 
+    // --- 2) Google Sheet zapis ---
+    const scriptUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
+    const secret = import.meta.env.VITE_GOOGLE_SHEET_SECRET;
+
+    if (scriptUrl) {
+      const payload = {
+        secret,
+        orderId,
+        firstName,
+        lastName,
+        coach,
+        packName: selectedPackage.name,
+        size,
+        extras: extrasLabels,
+        total,
+        referenceNumber,
+        iban: CONFIG.iban,
+        model: CONFIG.paymentModel,
+      };
+
+      await fetch(scriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      console.info("✅ Upisano u Google Sheet.");
+    }
+
+    setEmailStatus("sent");
+    emailedRef.current = true;
+  } catch (e) {
+    console.error("❌ Slanje nije uspjelo:", e);
+    setEmailStatus("error");
+  }
+}
+
+useEffect(() => {
+  if (step === Step.Payment) sendOrderNotification();
+}, [step]); // namjerno ne stavljamo CONFIG u deps
+  
   // --- DEV SMOKE TESTS ---
   useEffect(() => {
     try {
@@ -905,7 +943,7 @@ useEffect(() => {
                     <div className="flex flex-col items-center gap-3">
                       <div className="rounded-2xl p-4 border border-black/10 shadow-sm" style={{ background: "white" }}>
                         {/* Canvas način */}
-                        <canvas ref={handleCanvasRef} className="block" style={{ width: 300, height: 150 }} />
+                        <canvas ref={handleCanvasRef} className="block bg-white" style={{ width: 300, height: 150, background: '#fff' }} />
                         {/* Fallback: DIV render način */}
                         <div ref={handleBarcodeRef} style={{ width: 300, height: 150, display: "none" }} /> 
                       </div>

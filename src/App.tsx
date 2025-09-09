@@ -941,12 +941,23 @@ useEffect(() => {
                     </div>
 
                     <div className="flex flex-col items-center gap-3">
-                      <div className="rounded-2xl p-4 border border-black/10 shadow-sm" style={{ background: "white" }}>
-                        {/* Canvas način */}
-                        <canvas ref={handleCanvasRef} className="block bg-white" style={{ width: 300, height: 150, background: '#fff' }} />
-                        {/* Fallback: DIV render način */}
-                        <div ref={handleBarcodeRef} style={{ width: 300, height: 150, display: "none" }} /> 
-                      </div>
+                      <div
+                      className="rounded-2xl p-4 border border-black/10 shadow-sm barcode-surface"
+                      style={{ background: "#fff" }}
+                    >
+                     {/* Canvas način */}
+                    <canvas
+                      ref={handleCanvasRef}
+                      className="block bg-white"
+                      style={{ width: 300, height: 150, background: "#fff" }}
+                    />
+                    {/* Fallback: DIV render način */}
+                    <div
+                      ref={handleBarcodeRef}
+                      style={{ width: 300, height: 150, display: "none", background: "#fff" }}
+                    />
+                  </div>
+
                       <div className="text-xs text-black/60 text-center max-w-xs">
                         Skeniraj HUB 2D (PDF417) kod u mobilnoj aplikaciji. Ako skeniranje ne prepozna sve podatke,
                         upiši IBAN i iznos ručno, a u opis dodaj broj narudžbe. 

@@ -5,40 +5,37 @@
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Recite browseru da je stranica samo light -->
+  <!-- Reci pregledniku da je stranica samo *light* -->
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
   <meta name="theme-color" content="#ffffff">
 
   <title>Oprema KK Dinamo</title>
 
-  <!-- Tailwind config MORA biti prije CDN skripte -->
+  <!-- Tailwind: forsiramo dark po klasi (a klasu nikad ne dodamo) -->
   <script>
-    // Spriječi automatski dark po media queriju:
-    // koristiti ćemo samo “dark mode po klasi” (koju nigdje ne dodajemo)
     window.tailwind = window.tailwind || {};
     tailwind.config = { darkMode: 'class' };
   </script>
-
-  <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Forsiraj bijelu pozadinu i u dark okruženjima -->
+  <!-- Globalni override: bijela pozadina i u dark okruženjima -->
   <style>
     :root { color-scheme: light !important; }
     html, body { background:#fff !important; color:#000; }
     @media (prefers-color-scheme: dark) {
-      html, body { background:#fff !important; color:#000; }
+      html, body { background:#fff !important; color:#000 !important; }
     }
-    /* sigurnosni sloj oko canvasa */
-    .barcode-surface { background: #fff !important; }
+    /* ako neki browser pokuša invertirati sadržaj */
+    html, body, #root, canvas, img, video { filter: none !important; }
   </style>
 </head>
 
-<body class="bg-white text-black antialiased">
+
+<body class="bg-white text-black antialiased" style="background:#fff !important;">
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
+
 </html>
-  

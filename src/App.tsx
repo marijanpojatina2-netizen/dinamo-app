@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
   import { motion, AnimatePresence } from "framer-motion";
+import bwipjs from 'bwip-js';
 
 // =============================================================
 // KONFIGURACIJA
@@ -177,7 +178,23 @@ export default function App() {
 
 // UPLATA
 const [referenceNumber, setReferenceNumber] = useState("");
-
+// helper: pričekaj da se canvas i container refovi pojave
+async function waitForRefs(
+  getOk: () => boolean,
+  timeoutMs = 1500,
+  intervalMs = 50
+): Promise<void> {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      if (getOk()) return resolve();
+      if (Date.now() - start > timeoutMs) return reject(new Error('Canvas/container refs not mounted yet'));
+      setTimeout(tick, intervalMs);
+    };
+    tick();
+  });
+}
+  
 // "obični" refovi ostaju, ali ćemo ih puniti kroz callback refove
 const canvasRef = useRef<HTMLCanvasElement | null>(null);
 const barcodeRef = useRef<HTMLDivElement | null>(null);
@@ -276,58 +293,73 @@ const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
       setReferenceNumber(String(rnd));
     }
   }, [step, referenceNumber]);
-// Crtanje PDF417 — jednostavna, pouzdana varijanta s bwip-js
+// Crtanje PDF417 — stabilno: pričekaj refs, onda crtaj s bwip-js
 useEffect(() => {
   if (step !== Step.Payment) return;
-  if (!hub2dPayload || !hub2dPayload.trim()) return;
-  if (!refsReady) return; // čekamo da su refovi montirani
+  if (!hub2dPayload || !hub2dPayload.trim()) {
+    console.warn('[PDF417] prazni hub2dPayload');
+    return;
+  }
+
+  let cancelled = false;
 
   (async () => {
-    const canvas = canvasRef.current;
-    const container = barcodeRef.current;
-    if (!canvas) return;
-
-    // pripremi platno + uvijek bijela podloga (da se čita i u dark modu)
-    const w = 300, h = 150;
-    canvas.style.display = 'block';
-    canvas.width = w; 
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, w, h);
-    }
-    if (container) {
-      container.style.display = 'none'; 
-      container.innerHTML = '';
-    }
-
     try {
-      const mod: any = await import('bwip-js');
-      const bwip = mod?.default ?? mod;
-      await bwip.toCanvas(canvas, {
+      // 1) pričekaj da se refovi montiraju
+      await waitForRefs(() => Boolean(canvasRef.current /* && barcodeRef.current */));
+      if (cancelled) return;
+
+      const canvas = canvasRef.current!;
+      const container = barcodeRef.current;
+
+      // 2) pripremi platno (UVJEK bijela pozadina)
+      const w = 300, h = 150;
+      canvas.style.display = 'block';
+      canvas.width = w;
+      canvas.height = h;
+
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+      }
+      if (container) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+      }
+
+      // 3) nacrtaj PDF417
+      await bwipjs.toCanvas(canvas, {
         bcid: 'pdf417',
         text: hub2dPayload,
-        scale: 3,          // malo veći i čitljiviji
+        scale: 3,
         height: 10,
         includetext: false,
         columns: 6,
       });
-      // gotovo ✅
+
+      console.info('[PDF417] nacrtan OK. payload len =', hub2dPayload.length);
     } catch (e) {
-      console.error('[PDF417/bwip-js] greška crtanju:', e);
-      if (ctx) {
+      console.error('[PDF417] refs nisu spremni:', e);
+      // diskretna poruka na canvas ako baš sve padne
+      const c = canvasRef.current;
+      const ctx = c?.getContext('2d');
+      if (c && ctx) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, c.width || 300, c.height || 150);
         ctx.fillStyle = '#900';
         ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
         ctx.fillText('Greška pri crtanju barkoda', 10, 20);
       }
     }
   })();
-}, [step, hub2dPayload, refsReady]);
 
-
+  return () => { cancelled = true; };
+}, [step, hub2dPayload]);
+    
 // Automatsko slanje emaila + zapis u Google Sheet
 async function sendOrderNotification() {
+  // zaštite
   if (!selectedPackage) return;
   if (emailedRef.current) return;
 
@@ -355,32 +387,38 @@ async function sendOrderNotification() {
       });
     }
 
-    // --- 2) Google Sheet zapis ---
+    // --- 2) Google Sheet zapis (GET + no-cors da izbjegnemo CORS) ---
     const scriptUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
     const secret = import.meta.env.VITE_GOOGLE_SHEET_SECRET;
 
     if (scriptUrl) {
-      const payload = {
-        secret,
+      const params = new URLSearchParams({
+        secret: secret || "",
         orderId,
         firstName,
         lastName,
         coach,
         packName: selectedPackage.name,
         size,
-        extras: extrasLabels,
-        total,
+        extras: extrasLabels.join(", "),
+        total: String(total),
         referenceNumber,
         iban: CONFIG.iban,
         model: CONFIG.paymentModel,
-      };
-
-      await fetch(scriptUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
       });
-      console.info("✅ Upisano u Google Sheet.");
+      console.log('[Sheets] URL=', scriptUrl);
+      console.log('[Sheets] secret set? ', Boolean(secret));
+      console.log('[Sheets] payload=', Object.fromEntries(params.entries()));
+
+      const fullUrl = `${scriptUrl}?${params.toString()}`;
+      console.log('[Sheets] FULL GET URL ->', fullUrl);
+
+
+      // Namjerno bez await i s no-cors: zapis ide, a browser ne traži CORS zaglavlja
+      fetch(`${scriptUrl}?${params.toString()}`, {
+        method: "GET",
+        mode: "no-cors",
+      }).catch(() => { /* opaque response; ignoriramo grešku u konzoli */ });
     }
 
     setEmailStatus("sent");
@@ -391,10 +429,20 @@ async function sendOrderNotification() {
   }
 }
 
+// Poziv slanja na ulazu u korak Payment
 useEffect(() => {
-  if (step === Step.Payment) sendOrderNotification();
-}, [step]); // namjerno ne stavljamo CONFIG u deps
-  
+  if (step === Step.Payment) {
+    // ako još nema reference, generiraj je odmah (edge-case)
+    if (!referenceNumber) {
+      setReferenceNumber(String(Math.floor(1000 + Math.random() * 9000)));
+      // slanje ćemo napraviti u idućem renderu kad ref. postoji
+      return;
+    }
+    sendOrderNotification();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [step, referenceNumber]);
+
   // --- DEV SMOKE TESTS ---
   useEffect(() => {
     try {

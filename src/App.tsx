@@ -30,7 +30,7 @@ const CONFIG = {
         price: 110,
         image: "/Paket1.jpg",
         includes: ["2 majice", "1 hoodica", "1 hlače", "1 double face dres"],
-        spec: "Osnovni komplet za mlađe uzraste; lagani materijali, brzo sušenje.",
+        spec: "Osnovni komplet za mlađe uzraste.",
       },
       {
         id: "B",
@@ -38,7 +38,7 @@ const CONFIG = {
         price: 180,
         image: "/Paket2.jpg",
         includes: ["4 majice", "2 hoodice", "1 hlače", "1 double face dres"],
-        spec: "Napredni komplet s poboljšanom prozračnošću i izdržljivošću.",
+        spec: "Prošireni komplet za mlađe uzraste.",
       },
     ],
     extras: [
@@ -586,7 +586,7 @@ useEffect(() => {
       </header>
 
       {/* Main */}
-      <main className="w-full px-0 py-8">
+      <main className="w-full px-0 py-8 pb-[max(7rem,env(safe-area-inset-bottom))]">
         <AnimatePresence mode="wait">
           {/* PRIJAVA */}
           {step === Step.Login && (

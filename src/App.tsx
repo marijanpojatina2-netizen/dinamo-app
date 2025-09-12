@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
-  import { motion, AnimatePresence } from "framer-motion";
-import bwipjs from 'bwip-js';
+import { motion, AnimatePresence } from "framer-motion";
+import bwipjs from "bwip-js";
 
 // =============================================================
 // KONFIGURACIJA
@@ -17,8 +17,6 @@ const CONFIG = {
   paymentReferencePrefix: "DINAMO-OPREMA-",
   currency: "EUR",
   notificationEmails: ["oprema@kkdinamo.hr"],
-  // Ako postaviš URL (npr. /api/order-email), email će se poslati AUTOMATSKI na koraku „Uplata“.
-  // Ako je prazan string, email se NE šalje i ne prikazuje se nikakav UI.
   emailWebhook: "",
   deliveryLeadTimeDays: 30,
   theme: { primary: "#0A2A6B", dark: "#0B0E11" },
@@ -43,10 +41,10 @@ const CONFIG = {
       },
     ],
     extras: [
-      { id: "E_SHIRTS", label: "+2 majice", price: 20, image: "/majice2.jpg" },
-      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 45, image: "/hoodica_plava.jpg" },
-      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 45, image: "/hoodica_crna.jpg" },
-      { id: "E_BACKPACK", label: "Ruksak", price: 35, image: "/ruksak.jpg" },
+      { id: "E_SHIRTS", label: "+2 majice", price: 20, image: "/majice2.jpg", sizes: ["116","128","140","152","164","S","M","L","XL"] },
+      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 45, image: "/hoodica_plava.jpg", sizes: ["116","128","140","152","164","S","M","L","XL"] },
+      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 45, image: "/hoodica_crna.jpg", sizes: ["116","128","140","152","164","S","M","L","XL"] },
+      { id: "E_BACKPACK", label: "Ruksak", price: 35, image: "/ruksak.jpg" }, // bez sizes
     ],
   },
 } as const;
@@ -54,8 +52,21 @@ const CONFIG = {
 // =============================================================
 // TIPOVI
 // =============================================================
-type Pack = { id: string; name: string; price: number; image: string; spec: string; includes: ReadonlyArray<string> };
-type Extra = { id: string; label: string; price: number; image: string };
+type Pack = {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  spec: string;
+  includes: ReadonlyArray<string>;
+};
+type Extra = {
+  id: string;
+  label: string;
+  price: number;
+  image: string;
+  sizes?: ReadonlyArray<string>;
+};
 const Step = { Login: 0, Choose: 1, Extras: 2, Review: 3, Payment: 4 } as const;
 
 // =============================================================
@@ -121,8 +132,10 @@ function buildOrderEmail(params: {
   lastName: string;
   coach: string;
   packName: string;
-  size: string;
-  extras: string[];
+  jersey: string;
+  shirt: string;
+  hoodie: string;
+  extrasWithSizes: string[];
   total: number;
   referenceNumber: string;
 }) {
@@ -132,8 +145,9 @@ function buildOrderEmail(params: {
     `Narudžba: ${params.orderId}`,
     `Dijete: ${params.firstName} ${params.lastName}`,
     `Trener: ${params.coach}`,
-    `Paket: ${params.packName} (${params.size})`,
-    `Dodatno: ${params.extras.length ? params.extras.join(", ") : "—"}`,
+    `Paket: ${params.packName}`,
+    `Veličine (paket): dres ${params.jersey}, majica ${params.shirt}, hoodica ${params.hoodie}`,
+    `Dodatno: ${params.extrasWithSizes.length ? params.extrasWithSizes.join(", ") : "—"}`,
     `Ukupno: ${CONFIG.currency} ${params.total.toFixed(2)}`,
     `Poziv na broj: ${params.referenceNumber}`,
     `IBAN: ${CONFIG.iban}`,
@@ -163,7 +177,11 @@ export default function App() {
 
   // ODABIR
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
-  const [size, setSize] = useState("");
+  const [pkgSizes, setPkgSizes] = useState<{ jersey: string; shirt: string; hoodie: string }>({
+    jersey: "",
+    shirt: "",
+    hoodie: "",
+  });
   const [customImageA] = useState<string | null>(null);
   const [customImageB] = useState<string | null>(null);
   const [resolvedImageA, setResolvedImageA] = useState<string | null>(null);
@@ -171,49 +189,46 @@ export default function App() {
 
   // DODATNI ARTIKLI
   const [selectedExtras, setSelectedExtras] = useState<Set<string>>(new Set());
+  const [extraSizes, setExtraSizes] = useState<Record<string, string>>({}); // id -> size
 
   // MAIL (bez UI-a)
   const emailedRef = useRef(false);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
-// UPLATA
-const [referenceNumber, setReferenceNumber] = useState("");
-// helper: pričekaj da se canvas i container refovi pojave
-async function waitForRefs(
-  getOk: () => boolean,
-  timeoutMs = 1500,
-  intervalMs = 50
-): Promise<void> {
-  const start = Date.now();
-  return new Promise((resolve, reject) => {
-    const tick = () => {
-      if (getOk()) return resolve();
-      if (Date.now() - start > timeoutMs) return reject(new Error('Canvas/container refs not mounted yet'));
-      setTimeout(tick, intervalMs);
-    };
-    tick();
-  });
-}
-  
-// "obični" refovi ostaju, ali ćemo ih puniti kroz callback refove
-const canvasRef = useRef<HTMLCanvasElement | null>(null);
-const barcodeRef = useRef<HTMLDivElement | null>(null);
+  // UPLATA
+  const [referenceNumber, setReferenceNumber] = useState("");
 
-// callback refovi – zovu se kad se elementi pojave / nestanu u DOM-u
-const handleCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
-  canvasRef.current = node;
-  // setRefsReady(Boolean(node && barcodeRef.current));  // ← makni ovo
-}, []);
+  // helper čekanje refova
+  async function waitForRefs(getOk: () => boolean, timeoutMs = 1500, intervalMs = 50): Promise<void> {
+    const start = Date.now();
+    return new Promise((resolve, reject) => {
+      const tick = () => {
+        if (getOk()) return resolve();
+        if (Date.now() - start > timeoutMs) return reject(new Error("Canvas/container refs not mounted yet"));
+        setTimeout(tick, intervalMs);
+      };
+      tick();
+    });
+  }
 
-const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
-  barcodeRef.current = node;
-  // setRefsReady(Boolean(node && canvasRef.current));   // ← makni ovo
-}, []); 
+  // barkod refs
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const barcodeRef = useRef<HTMLDivElement | null>(null);
 
+  const handleCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+    canvasRef.current = node;
+  }, []);
+  const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
+    barcodeRef.current = node;
+  }, []);
 
-  // Scroll to top on each step change (forward/back)
+  // Scroll to top on each step change
   useEffect(() => {
-    try { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, 0); }
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
   }, [step]);
 
   // Fokus zaštita
@@ -224,7 +239,9 @@ const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
     if (el && document.activeElement !== el) {
       const pos = el.value.length;
       el.focus();
-      try { el.setSelectionRange(pos, pos); } catch {}
+      try {
+        el.setSelectionRange(pos, pos);
+      } catch {}
     }
   });
 
@@ -240,7 +257,11 @@ const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
       });
     const chain = async (cands: string[], set: (v: string | null) => void) => {
       for (const u of cands) {
-        try { const ok = await preload(u); set(ok); return; } catch {}
+        try {
+          const ok = await preload(u);
+          set(ok);
+          return;
+        } catch {}
       }
       set(null);
     };
@@ -253,23 +274,34 @@ const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
     []
   );
 
-  const selectedPackage = useMemo(
-    () => CONFIG.products.packages.find((p) => p.id === selectedPackageId) || null,
-    [selectedPackageId]
-  );
+  const selectedPackage = useMemo(() => CONFIG.products.packages.find((p) => p.id === selectedPackageId) || null, [selectedPackageId]);
 
-  const extrasLabels = useMemo(
-    () => (Array.from(selectedExtras).map((id) => extrasById[id]?.label).filter(Boolean) as string[]),
-    [selectedExtras]
-  );
+  const extrasWithSizesLabels = useMemo(() => {
+    return Array.from(selectedExtras)
+      .map((id) => {
+        const ex = extrasById[id];
+        if (!ex) return null;
+        const size = ex.sizes ? extraSizes[id] || "" : "";
+        return ex.sizes ? `${ex.label} (${size || "—"})` : ex.label;
+      })
+      .filter(Boolean) as string[];
+  }, [selectedExtras, extraSizes]);
 
-  const total = useMemo(
-    () => (selectedPackage ? selectedPackage.price + extrasTotal(selectedExtras) : 0),
-    [selectedPackage, selectedExtras]
-  );
+  const total = useMemo(() => (selectedPackage ? selectedPackage.price + extrasTotal(selectedExtras) : 0), [selectedPackage, selectedExtras]);
 
   const canContinueFromLogin = firstName.trim().length >= 1 && lastName.trim().length >= 1 && coach.trim().length >= 1;
-  const canConfirmPackage = Boolean(selectedPackage) && size !== "";
+
+  const canConfirmPackage =
+    Boolean(selectedPackage) && pkgSizes.jersey !== "" && pkgSizes.shirt !== "" && pkgSizes.hoodie !== "";
+
+  // svi odabrani extras koji imaju sizes moraju imati veličinu
+  const allExtrasSizedOk = useMemo(() => {
+    for (const id of selectedExtras) {
+      const ex = extrasById[id];
+      if (ex?.sizes && !(extraSizes[id] && extraSizes[id] !== "")) return false;
+    }
+    return true;
+  }, [selectedExtras, extraSizes]);
 
   const hub2dPayload = useMemo(() => {
     if (!selectedPackage || !referenceNumber) return "";
@@ -281,7 +313,7 @@ const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
       receiverName: CONFIG.clubName,
       description: `oprema ${firstName} ${lastName}`,
     });
-  }, [selectedPackage, total, firstName, lastName, size, orderId, referenceNumber]);
+  }, [selectedPackage, total, firstName, lastName, referenceNumber]);
 
   // Dodjela poziva na broj
   useEffect(() => {
@@ -290,155 +322,154 @@ const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
       setReferenceNumber(String(rnd));
     }
   }, [step, referenceNumber]);
-// Crtanje PDF417 — stabilno: pričekaj refs, onda crtaj s bwip-js
-useEffect(() => {
-  if (step !== Step.Payment) return;
-  if (!hub2dPayload || !hub2dPayload.trim()) {
-    console.warn('[PDF417] prazni hub2dPayload');
-    return;
-  }
 
-  let cancelled = false;
-
-  (async () => {
-    try {
-      // 1) pričekaj da se refovi montiraju
-      await waitForRefs(() => Boolean(canvasRef.current /* && barcodeRef.current */));
-      if (cancelled) return;
-
-      const canvas = canvasRef.current!;
-      const container = barcodeRef.current;
-
-      // 2) pripremi platno (UVJEK bijela pozadina)
-      const w = 300, h = 150;
-      canvas.style.display = 'block';
-      canvas.width = w;
-      canvas.height = h;
-
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, w, h);
-      }
-      if (container) {
-        container.style.display = 'none';
-        container.innerHTML = '';
-      }
-
-      // 3) nacrtaj PDF417
-      await bwipjs.toCanvas(canvas, {
-        bcid: 'pdf417',
-        text: hub2dPayload,
-        scale: 3,
-        height: 10,
-        includetext: false,
-        columns: 6,
-      });
-
-      console.info('[PDF417] nacrtan OK. payload len =', hub2dPayload.length);
-    } catch (e) {
-      console.error('[PDF417] refs nisu spremni:', e);
-      // diskretna poruka na canvas ako baš sve padne
-      const c = canvasRef.current;
-      const ctx = c?.getContext('2d');
-      if (c && ctx) {
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, c.width || 300, c.height || 150);
-        ctx.fillStyle = '#900';
-        ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-        ctx.fillText('Greška pri crtanju barkoda', 10, 20);
-      }
-    }
-  })();
-
-  return () => { cancelled = true; };
-}, [step, hub2dPayload]);
-    
-// Automatsko slanje emaila + zapis u Google Sheet
-async function sendOrderNotification() {
-  // zaštite
-  if (!selectedPackage) return;
-  if (emailedRef.current) return;
-
-  setEmailStatus("sending");
-
-  try {
-    // --- 1) Email (ako je uključen webhook) ---
-    if (CONFIG.emailWebhook) {
-      const email = buildOrderEmail({
-        orderId,
-        firstName,
-        lastName,
-        coach,
-        packName: selectedPackage.name,
-        size,
-        extras: extrasLabels,
-        total,
-        referenceNumber,
-      });
-
-      await fetch(CONFIG.emailWebhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(email),
-      });
-    }
-
-    // --- 2) Google Sheet zapis (GET + no-cors da izbjegnemo CORS) ---
-    const scriptUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
-    const secret = import.meta.env.VITE_GOOGLE_SHEET_SECRET;
-
-    if (scriptUrl) {
-      const params = new URLSearchParams({
-        secret: secret || "",
-        orderId,
-        firstName,
-        lastName,
-        coach,
-        packName: selectedPackage.name,
-        size,
-        extras: extrasLabels.join(", "),
-        total: String(total),
-        referenceNumber,
-        iban: CONFIG.iban,
-        model: CONFIG.paymentModel,
-      });
-      console.log('[Sheets] URL=', scriptUrl);
-      console.log('[Sheets] secret set? ', Boolean(secret));
-      console.log('[Sheets] payload=', Object.fromEntries(params.entries()));
-
-      const fullUrl = `${scriptUrl}?${params.toString()}`;
-      console.log('[Sheets] FULL GET URL ->', fullUrl);
-
-
-      // Namjerno bez await i s no-cors: zapis ide, a browser ne traži CORS zaglavlja
-      fetch(`${scriptUrl}?${params.toString()}`, {
-        method: "GET",
-        mode: "no-cors",
-      }).catch(() => { /* opaque response; ignoriramo grešku u konzoli */ });
-    }
-
-    setEmailStatus("sent");
-    emailedRef.current = true;
-  } catch (e) {
-    console.error("❌ Slanje nije uspjelo:", e);
-    setEmailStatus("error");
-  }
-}
-
-// Poziv slanja na ulazu u korak Payment
-useEffect(() => {
-  if (step === Step.Payment) {
-    // ako još nema reference, generiraj je odmah (edge-case)
-    if (!referenceNumber) {
-      setReferenceNumber(String(Math.floor(1000 + Math.random() * 9000)));
-      // slanje ćemo napraviti u idućem renderu kad ref. postoji
+  // Crtanje PDF417
+  useEffect(() => {
+    if (step !== Step.Payment) return;
+    if (!hub2dPayload || !hub2dPayload.trim()) {
+      console.warn("[PDF417] prazni hub2dPayload");
       return;
     }
-    sendOrderNotification();
+    let cancelled = false;
+    (async () => {
+      try {
+        await waitForRefs(() => Boolean(canvasRef.current));
+        if (cancelled) return;
+
+        const canvas = canvasRef.current!;
+        const container = barcodeRef.current;
+
+        const w = 300,
+          h = 150;
+        canvas.style.display = "block";
+        canvas.width = w;
+        canvas.height = h;
+
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+        }
+        if (container) {
+          container.style.display = "none";
+          container.innerHTML = "";
+        }
+
+        await bwipjs.toCanvas(canvas, {
+          bcid: "pdf417",
+          text: hub2dPayload,
+          scale: 3,
+          height: 10,
+          includetext: false,
+          columns: 6,
+        });
+
+        console.info("[PDF417] nacrtan OK. payload len =", hub2dPayload.length);
+      } catch (e) {
+        console.error("[PDF417] refs nisu spremni:", e);
+        const c = canvasRef.current;
+        const ctx = c?.getContext("2d");
+        if (c && ctx) {
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, c.width || 300, c.height || 150);
+          ctx.fillStyle = "#900";
+          ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+          ctx.fillText("Greška pri crtanju barkoda", 10, 20);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, hub2dPayload]);
+
+  // Automatsko slanje emaila + zapis u Google Sheet
+  async function sendOrderNotification() {
+    if (!selectedPackage) return;
+    if (emailedRef.current) return;
+
+    setEmailStatus("sending");
+
+    try {
+      // --- 1) Email (ako je uključen webhook) ---
+      if (CONFIG.emailWebhook) {
+        const email = buildOrderEmail({
+          orderId,
+          firstName,
+          lastName,
+          coach,
+          packName: selectedPackage.name,
+          jersey: pkgSizes.jersey,
+          shirt: pkgSizes.shirt,
+          hoodie: pkgSizes.hoodie,
+          extrasWithSizes: extrasWithSizesLabels,
+          total,
+          referenceNumber,
+        });
+
+        await fetch(CONFIG.emailWebhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(email),
+        });
+      }
+
+      // --- 2) Google Sheet zapis (GET + no-cors) ---
+      const scriptUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
+      const secret = import.meta.env.VITE_GOOGLE_SHEET_SECRET;
+
+      if (scriptUrl) {
+        const extrasJson = JSON.stringify(
+          Array.from(selectedExtras).reduce<Record<string, string>>((acc, id) => {
+            const ex = extrasById[id];
+            acc[id] = ex?.sizes ? (extraSizes[id] || "") : "";
+            return acc;
+          }, {})
+        );
+
+        const params = new URLSearchParams({
+          secret: secret || "",
+          orderId,
+          firstName,
+          lastName,
+          coach,
+          packName: selectedPackage.name,
+          jerseySize: pkgSizes.jersey,
+          shirtSize: pkgSizes.shirt,
+          hoodieSize: pkgSizes.hoodie,
+          extras: extrasWithSizesLabels.join(", "),
+          extrasJson,
+          total: String(total),
+          referenceNumber,
+          iban: CONFIG.iban,
+          model: CONFIG.paymentModel,
+        });
+
+        const fullUrl = `${scriptUrl}?${params.toString()}`;
+        console.log("[Sheets] FULL GET URL ->", fullUrl);
+
+        fetch(fullUrl, { method: "GET", mode: "no-cors" }).catch(() => {});
+      }
+
+      setEmailStatus("sent");
+      emailedRef.current = true;
+    } catch (e) {
+      console.error("❌ Slanje nije uspjelo:", e);
+      setEmailStatus("error");
+    }
   }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [step, referenceNumber]);
+
+  // Poziv slanja na ulazu u korak Payment
+  useEffect(() => {
+    if (step === Step.Payment) {
+      if (!referenceNumber) {
+        setReferenceNumber(String(Math.floor(1000 + Math.random() * 9000)));
+        return;
+      }
+      sendOrderNotification();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, referenceNumber]);
 
   // --- DEV SMOKE TESTS ---
   useEffect(() => {
@@ -454,10 +485,8 @@ useEffect(() => {
         description: "Test plaćanje",
       });
       if (!p.includes("HRVHUB30")) throw new Error("HUB payload missing header");
-      // eslint-disable-next-line no-console
       console.info("[Smoke] Basic runtime checks passed.");
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error("[Smoke] Basic runtime checks failed:", e);
     }
   }, []);
@@ -535,7 +564,11 @@ useEffect(() => {
                 const y = window.scrollY;
                 setSelectedPackageId(pkg.id);
                 requestAnimationFrame(() => {
-                  try { window.scrollTo({ top: y, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, y); }
+                  try {
+                    window.scrollTo({ top: y, left: 0, behavior: "auto" });
+                  } catch {
+                    window.scrollTo(0, y);
+                  }
                 });
               }}
               className={`w-full py-2.5 rounded-xl font-medium transition-all border ${
@@ -550,7 +583,19 @@ useEffect(() => {
     </Card>
   );
 
-  const ExtraCard = ({ extra, checked, onToggle }: { extra: Extra; checked: boolean; onToggle: () => void }) => (
+  const ExtraCard = ({
+    extra,
+    checked,
+    onToggle,
+    sizeValue,
+    onSizeChange,
+  }: {
+    extra: Extra;
+    checked: boolean;
+    onToggle: () => void;
+    sizeValue: string;
+    onSizeChange: (v: string) => void;
+  }) => (
     <div className={`rounded-2xl border ${checked ? "border-black" : "border-black/10"} overflow-hidden bg-white shadow-sm transition-all`}>
       <div className="relative" style={{ aspectRatio: "1 / 1" }}>
         <img
@@ -570,14 +615,36 @@ useEffect(() => {
           </div>
         </div>
       </div>
-      <div className="p-4">
+      <div className="p-4 space-y-3">
+        {extra.sizes && checked && (
+          <Field id={`extra-size-${extra.id}`} label="Veličina">
+            <select
+              value={sizeValue}
+              onChange={(e) => onSizeChange(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
+            >
+              <option value="" disabled>
+                Odaberi veličinu
+              </option>
+              {extra.sizes.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <button
           type="button"
           onClick={() => {
             const y = window.scrollY;
             onToggle();
             requestAnimationFrame(() => {
-              try { window.scrollTo({ top: y, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, y); }
+              try {
+                window.scrollTo({ top: y, left: 0, behavior: "auto" });
+              } catch {
+                window.scrollTo(0, y);
+              }
             });
           }}
           className={`w-full py-2.5 rounded-xl font-medium transition-all border ${
@@ -646,7 +713,10 @@ useEffect(() => {
                           ref={firstRef}
                           value={firstName}
                           onFocus={() => setActiveField("first")}
-                          onChange={(e) => { setFirstName(e.target.value); setActiveField("first"); }}
+                          onChange={(e) => {
+                            setFirstName(e.target.value);
+                            setActiveField("first");
+                          }}
                           placeholder="npr. Luka"
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10"
                         />
@@ -658,7 +728,10 @@ useEffect(() => {
                           ref={lastRef}
                           value={lastName}
                           onFocus={() => setActiveField("last")}
-                          onChange={(e) => { setLastName(e.target.value); setActiveField("last"); }}
+                          onChange={(e) => {
+                            setLastName(e.target.value);
+                            setActiveField("last");
+                          }}
                           placeholder="npr. Horvat"
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10"
                         />
@@ -670,7 +743,10 @@ useEffect(() => {
                           ref={coachRef}
                           value={coach}
                           onFocus={() => setActiveField("coach")}
-                          onChange={(e) => { setCoach(e.target.value); setActiveField("coach"); }}
+                          onChange={(e) => {
+                            setCoach(e.target.value);
+                            setActiveField("coach");
+                          }}
                           placeholder="npr. Marko"
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10"
                         />
@@ -720,19 +796,56 @@ useEffect(() => {
               <div className="mt-8 grid grid-cols-1 gap-4 px-4">
                 <Card>
                   <div className="p-5">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                      <Field label="Veličina opreme" id="size">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                      <Field label="Veličina dresa" id="jersey">
                         <select
-                          value={size}
-                          onChange={(e) => setSize(e.target.value)}
+                          value={pkgSizes.jersey}
+                          onChange={(e) => setPkgSizes((prev) => ({ ...prev, jersey: e.target.value }))}
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
                         >
-                          <option value="" disabled>Odaberi veličinu</option>
+                          <option value="" disabled>
+                            Odaberi veličinu
+                          </option>
                           {CONFIG.sizes.map((s) => (
-                            <option key={s} value={s}>{s}</option>
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
                           ))}
                         </select>
                       </Field>
+                      <Field label="Veličina majice" id="shirt">
+                        <select
+                          value={pkgSizes.shirt}
+                          onChange={(e) => setPkgSizes((prev) => ({ ...prev, shirt: e.target.value }))}
+                          className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
+                        >
+                          <option value="" disabled>
+                            Odaberi veličinu
+                          </option>
+                          {CONFIG.sizes.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Veličina hoodice" id="hoodie">
+                        <select
+                          value={pkgSizes.hoodie}
+                          onChange={(e) => setPkgSizes((prev) => ({ ...prev, hoodie: e.target.value }))}
+                          className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
+                        >
+                          <option value="" disabled>
+                            Odaberi veličinu
+                          </option>
+                          {CONFIG.sizes.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
                       <div className="md:justify-self-end">
                         <div className="text-sm text-black/60 mb-2">Cijena paketa</div>
                         <div className="text-2xl font-bold">{formatCurrency(selectedPackage?.price ?? 0)}</div>
@@ -744,7 +857,7 @@ useEffect(() => {
                       <PrimaryButton
                         onClick={() => canConfirmPackage && setStep(Step.Extras)}
                         disabled={!canConfirmPackage}
-                        title={!canConfirmPackage ? "Odaberi paket i veličinu" : "Potvrdi"}
+                        title={!canConfirmPackage ? "Odaberi paket i sve veličine" : "Potvrdi"}
                         style={{ opacity: canConfirmPackage ? 1 : 0.6, cursor: canConfirmPackage ? "pointer" : "not-allowed" }}
                       >
                         Potvrdi
@@ -778,10 +891,24 @@ useEffect(() => {
                     key={ex.id}
                     extra={ex}
                     checked={selectedExtras.has(ex.id)}
+                    sizeValue={extraSizes[ex.id] || ""}
+                    onSizeChange={(v) => setExtraSizes((prev) => ({ ...prev, [ex.id]: v }))}
                     onToggle={() => {
                       setSelectedExtras((prev) => {
                         const next = new Set(prev);
-                        next.has(ex.id) ? next.delete(ex.id) : next.add(ex.id);
+                        if (next.has(ex.id)) {
+                          next.delete(ex.id);
+                          setExtraSizes((p) => {
+                            const { [ex.id]: _, ...rest } = p;
+                            return rest;
+                          });
+                        } else {
+                          next.add(ex.id);
+                          if (ex.sizes && !extraSizes[ex.id]) {
+                            // inicijalno prazno, korisnik mora izabrati
+                            setExtraSizes((p) => ({ ...p, [ex.id]: "" }));
+                          }
+                        }
                         return next;
                       });
                     }}
@@ -797,7 +924,14 @@ useEffect(() => {
                       <div className="flex items-center gap-4">
                         <div className="text-sm text-black/60">Ukupno</div>
                         <div className="text-2xl font-bold">{formatCurrency(total)}</div>
-                        <PrimaryButton onClick={() => setStep(Step.Review)}>Potvrdi</PrimaryButton>
+                        <PrimaryButton
+                          onClick={() => allExtrasSizedOk && setStep(Step.Review)}
+                          disabled={!allExtrasSizedOk}
+                          title={!allExtrasSizedOk ? "Odaberi veličine za odabrane artikle" : "Potvrdi"}
+                          style={{ opacity: allExtrasSizedOk ? 1 : 0.6, cursor: allExtrasSizedOk ? "pointer" : "not-allowed" }}
+                        >
+                          Potvrdi
+                        </PrimaryButton>
                       </div>
                     </div>
                   </div>
@@ -828,7 +962,9 @@ useEffect(() => {
                     <div className="space-y-4">
                       <div>
                         <div className="text-sm text-black/60">Dijete</div>
-                        <div className="font-medium">{firstName} {lastName}</div>
+                        <div className="font-medium">
+                          {firstName} {lastName}
+                        </div>
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Trener</div>
@@ -839,8 +975,10 @@ useEffect(() => {
                         <div className="font-medium">{selectedPackage?.name}</div>
                       </div>
                       <div>
-                        <div className="text-sm text-black/60">Veličina</div>
-                        <div className="font-medium">{size}</div>
+                        <div className="text-sm text-black/60">Veličine (paket)</div>
+                        <div className="font-medium">
+                          Dres: {pkgSizes.jersey} · Majica: {pkgSizes.shirt} · Hoodica: {pkgSizes.hoodie}
+                        </div>
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Sadržaj paketa</div>
@@ -862,8 +1000,8 @@ useEffect(() => {
                       <div>
                         <div className="text-sm text-black/60">Dodatni artikli</div>
                         <ul className="text-sm">
-                          {extrasLabels.length ? (
-                            extrasLabels.map((l) => <li key={l}>• {l}</li>)
+                          {extrasWithSizesLabels.length ? (
+                            extrasWithSizesLabels.map((l) => <li key={l}>• {l}</li>)
                           ) : (
                             <li>—</li>
                           )}
@@ -880,7 +1018,10 @@ useEffect(() => {
                       {CONFIG.emailWebhook ? (
                         <div className="text-xs text-black/70" aria-live="polite">
                           {emailStatus === "idle" && (
-                            <>Narudžba je obvezujuća. Naručitelj se obvezuje uplatiti u roku od 7 dana. Detalji narudžbe bit će poslani na <b>oprema@kkdinamo.hr</b>.</>
+                            <>
+                              Narudžba je obvezujuća. Naručitelj se obvezuje uplatiti u roku od 7 dana. Detalji narudžbe
+                              bit će poslani na <b>oprema@kkdinamo.hr</b>.
+                            </>
                           )}
                           {emailStatus === "sending" && <>Šaljemo potvrdu narudžbe…</>}
                           {emailStatus === "sent" && <>Potvrda narudžbe poslana na e-mail.</>}
@@ -924,7 +1065,9 @@ useEffect(() => {
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Dijete</div>
-                        <div className="font-medium">{firstName} {lastName}</div>
+                        <div className="font-medium">
+                          {firstName} {lastName}
+                        </div>
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Trener</div>
@@ -932,12 +1075,14 @@ useEffect(() => {
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Paket</div>
-                        <div className="font-medium">{selectedPackage?.name} ({size})</div>
+                        <div className="font-medium">
+                          {selectedPackage?.name} (dres {pkgSizes.jersey}, majica {pkgSizes.shirt}, hoodica {pkgSizes.hoodie})
+                        </div>
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Dodatni artikli</div>
                         <ul className="text-sm">
-                          {extrasLabels.length ? extrasLabels.map((l) => <li key={l}>• {l}</li>) : <li>—</li>}
+                          {extrasWithSizesLabels.length ? extrasWithSizesLabels.map((l) => <li key={l}>• {l}</li>) : <li>—</li>}
                         </ul>
                         <div className="mt-3 text-sm text-black/70">
                           Kontakt za podršku: {CONFIG.supportContact}. Rok isporuke: {CONFIG.deliveryLeadTimeDays} dana od uplate.
@@ -950,14 +1095,26 @@ useEffect(() => {
                       <div className="pt-4">
                         <div className="text-sm text-black/60">Upute za uplatu (virman / mobilno bankarstvo)</div>
                         <ul className="text-sm leading-7">
-                          <li><span className="font-medium">Primatelj:</span> {CONFIG.clubName}</li>
-                          <li><span className="font-medium">IBAN:</span> {CONFIG.iban}</li>
+                          <li>
+                            <span className="font-medium">Primatelj:</span> {CONFIG.clubName}
+                          </li>
+                          <li>
+                            <span className="font-medium">IBAN:</span> {CONFIG.iban}
+                          </li>
                           {CONFIG.paymentModel && (
-                            <li><span className="font-medium">Model:</span> {CONFIG.paymentModel}</li>
+                            <li>
+                              <span className="font-medium">Model:</span> {CONFIG.paymentModel}
+                            </li>
                           )}
-                          <li><span className="font-medium">Poziv na broj:</span> {referenceNumber}</li>
-                          <li><span className="font-medium">Opis uplate:</span> {orderId} – {firstName} {lastName}</li>
-                          <li><span className="font-medium">Iznos:</span> {formatCurrency(total)}</li>
+                          <li>
+                            <span className="font-medium">Poziv na broj:</span> {referenceNumber}
+                          </li>
+                          <li>
+                            <span className="font-medium">Opis uplate:</span> {orderId} – {firstName} {lastName}
+                          </li>
+                          <li>
+                            <span className="font-medium">Iznos:</span> {formatCurrency(total)}
+                          </li>
                         </ul>
                       </div>
                       <div className="flex gap-3">
@@ -967,19 +1124,14 @@ useEffect(() => {
                     </div>
 
                     <div className="flex flex-col items-center gap-3">
-                      <div className="rounded-2xl p-4 border border-black/10 shadow-sm barcode-surface" style={{ background: '#fff' }}>
-  <canvas
-    ref={handleCanvasRef}
-    className="block bg-white"
-    style={{ width: 300, height: 150, background: '#fff' }}
-  />
-  <div ref={handleBarcodeRef} style={{ width: 300, height: 150, display: 'none', background: '#fff' }} />
-</div>
-
+                      <div className="rounded-2xl p-4 border border-black/10 shadow-sm barcode-surface" style={{ background: "#fff" }}>
+                        <canvas ref={handleCanvasRef} className="block bg-white" style={{ width: 300, height: 150, background: "#fff" }} />
+                        <div ref={handleBarcodeRef} style={{ width: 300, height: 150, display: "none", background: "#fff" }} />
+                      </div>
 
                       <div className="text-xs text-black/60 text-center max-w-xs">
-                        Skeniraj HUB 2D (PDF417) kod u mobilnoj aplikaciji. Ako skeniranje ne prepozna sve podatke,
-                        upiši IBAN i iznos ručno, a u opis dodaj broj narudžbe. 
+                        Skeniraj HUB 2D (PDF417) kod u mobilnoj aplikaciji. Ako skeniranje ne prepozna sve podatke, upiši IBAN i iznos ručno, a u opis
+                        dodaj broj narudžbe.
                       </div>
                       <details className="text-xs text-black/60">
                         <summary className="cursor-pointer">Prikaži HUB 2D (tekstualni payload)</summary>
@@ -987,7 +1139,7 @@ useEffect(() => {
                       </details>
                     </div>
                   </div>
-                </Card> 
+                </Card>
               </div>
             </motion.section>
           )}

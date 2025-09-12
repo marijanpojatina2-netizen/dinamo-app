@@ -157,7 +157,9 @@ function buildOrderEmail(params: {
   return { to: CONFIG.notificationEmails, subject, text, html };
 }
 
-const extrasById: Record<string, Extra> = Object.fromEntries(CONFIG.products.extras.map((e) => [e.id, e]));
+// Widen union → treat all extras as `Extra` (sizes?: ...)
+const EXTRAS: ReadonlyArray<Extra> = CONFIG.products.extras as ReadonlyArray<Extra>;
+const extrasById: Record<string, Extra> = Object.fromEntries(EXTRAS.map((e) => [e.id, e]));
 const extrasTotal = (selected: Set<string>) => Array.from(selected).reduce((s, id) => s + (extrasById[id]?.price || 0), 0);
 
 // =============================================================
@@ -339,8 +341,7 @@ export default function App() {
         const canvas = canvasRef.current!;
         const container = barcodeRef.current;
 
-        const w = 300,
-          h = 150;
+        const w = 300, h = 150;
         canvas.style.display = "block";
         canvas.width = w;
         canvas.height = h;
@@ -378,9 +379,7 @@ export default function App() {
         }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [step, hub2dPayload]);
 
   // Automatsko slanje emaila + zapis u Google Sheet
@@ -564,11 +563,7 @@ export default function App() {
                 const y = window.scrollY;
                 setSelectedPackageId(pkg.id);
                 requestAnimationFrame(() => {
-                  try {
-                    window.scrollTo({ top: y, left: 0, behavior: "auto" });
-                  } catch {
-                    window.scrollTo(0, y);
-                  }
+                  try { window.scrollTo({ top: y, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, y); }
                 });
               }}
               className={`w-full py-2.5 rounded-xl font-medium transition-all border ${
@@ -616,35 +611,13 @@ export default function App() {
         </div>
       </div>
       <div className="p-4 space-y-3">
-        {extra.sizes && checked && (
-          <Field id={`extra-size-${extra.id}`} label="Veličina">
-            <select
-              value={sizeValue}
-              onChange={(e) => onSizeChange(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
-            >
-              <option value="" disabled>
-                Odaberi veličinu
-              </option>
-              {extra.sizes.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
         <button
           type="button"
           onClick={() => {
             const y = window.scrollY;
             onToggle();
             requestAnimationFrame(() => {
-              try {
-                window.scrollTo({ top: y, left: 0, behavior: "auto" });
-              } catch {
-                window.scrollTo(0, y);
-              }
+              try { window.scrollTo({ top: y, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, y); }
             });
           }}
           className={`w-full py-2.5 rounded-xl font-medium transition-all border ${
@@ -653,6 +626,21 @@ export default function App() {
         >
           {checked ? "Ukloni" : "Dodaj"}
         </button>
+
+        {checked && Array.isArray(extra.sizes) && (
+          <Field id={`extra-size-${extra.id}`} label="Veličina">
+            <select
+              value={sizeValue}
+              onChange={(e) => onSizeChange(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
+            >
+              <option value="" disabled>Odaberi veličinu</option>
+              {(extra.sizes ?? []).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
+        )}
       </div>
     </div>
   );
@@ -713,10 +701,7 @@ export default function App() {
                           ref={firstRef}
                           value={firstName}
                           onFocus={() => setActiveField("first")}
-                          onChange={(e) => {
-                            setFirstName(e.target.value);
-                            setActiveField("first");
-                          }}
+                          onChange={(e) => { setFirstName(e.target.value); setActiveField("first"); }}
                           placeholder="npr. Luka"
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10"
                         />
@@ -728,10 +713,7 @@ export default function App() {
                           ref={lastRef}
                           value={lastName}
                           onFocus={() => setActiveField("last")}
-                          onChange={(e) => {
-                            setLastName(e.target.value);
-                            setActiveField("last");
-                          }}
+                          onChange={(e) => { setLastName(e.target.value); setActiveField("last"); }}
                           placeholder="npr. Horvat"
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10"
                         />
@@ -743,10 +725,7 @@ export default function App() {
                           ref={coachRef}
                           value={coach}
                           onFocus={() => setActiveField("coach")}
-                          onChange={(e) => {
-                            setCoach(e.target.value);
-                            setActiveField("coach");
-                          }}
+                          onChange={(e) => { setCoach(e.target.value); setActiveField("coach"); }}
                           placeholder="npr. Marko"
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10"
                         />
@@ -803,14 +782,8 @@ export default function App() {
                           onChange={(e) => setPkgSizes((prev) => ({ ...prev, jersey: e.target.value }))}
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
                         >
-                          <option value="" disabled>
-                            Odaberi veličinu
-                          </option>
-                          {CONFIG.sizes.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
+                          <option value="" disabled>Odaberi veličinu</option>
+                          {CONFIG.sizes.map((s) => (<option key={s} value={s}>{s}</option>))}
                         </select>
                       </Field>
                       <Field label="Veličina majice" id="shirt">
@@ -819,14 +792,8 @@ export default function App() {
                           onChange={(e) => setPkgSizes((prev) => ({ ...prev, shirt: e.target.value }))}
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
                         >
-                          <option value="" disabled>
-                            Odaberi veličinu
-                          </option>
-                          {CONFIG.sizes.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
+                          <option value="" disabled>Odaberi veličinu</option>
+                          {CONFIG.sizes.map((s) => (<option key={s} value={s}>{s}</option>))}
                         </select>
                       </Field>
                       <Field label="Veličina hoodice" id="hoodie">
@@ -835,14 +802,8 @@ export default function App() {
                           onChange={(e) => setPkgSizes((prev) => ({ ...prev, hoodie: e.target.value }))}
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
                         >
-                          <option value="" disabled>
-                            Odaberi veličinu
-                          </option>
-                          {CONFIG.sizes.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
+                          <option value="" disabled>Odaberi veličinu</option>
+                          {CONFIG.sizes.map((s) => (<option key={s} value={s}>{s}</option>))}
                         </select>
                       </Field>
 
@@ -886,7 +847,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4">
-                {CONFIG.products.extras.map((ex) => (
+                {EXTRAS.map((ex) => (
                   <ExtraCard
                     key={ex.id}
                     extra={ex}
@@ -904,8 +865,7 @@ export default function App() {
                           });
                         } else {
                           next.add(ex.id);
-                          if (ex.sizes && !extraSizes[ex.id]) {
-                            // inicijalno prazno, korisnik mora izabrati
+                          if (Array.isArray(ex.sizes) && !extraSizes[ex.id]) {
                             setExtraSizes((p) => ({ ...p, [ex.id]: "" }));
                           }
                         }
@@ -962,9 +922,7 @@ export default function App() {
                     <div className="space-y-4">
                       <div>
                         <div className="text-sm text-black/60">Dijete</div>
-                        <div className="font-medium">
-                          {firstName} {lastName}
-                        </div>
+                        <div className="font-medium">{firstName} {lastName}</div>
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Trener</div>
@@ -1018,10 +976,7 @@ export default function App() {
                       {CONFIG.emailWebhook ? (
                         <div className="text-xs text-black/70" aria-live="polite">
                           {emailStatus === "idle" && (
-                            <>
-                              Narudžba je obvezujuća. Naručitelj se obvezuje uplatiti u roku od 7 dana. Detalji narudžbe
-                              bit će poslani na <b>oprema@kkdinamo.hr</b>.
-                            </>
+                            <>Narudžba je obvezujuća. Naručitelj se obvezuje uplatiti u roku od 7 dana. Detalji narudžbe bit će poslani na <b>oprema@kkdinamo.hr</b>.</>
                           )}
                           {emailStatus === "sending" && <>Šaljemo potvrdu narudžbe…</>}
                           {emailStatus === "sent" && <>Potvrda narudžbe poslana na e-mail.</>}
@@ -1065,9 +1020,7 @@ export default function App() {
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Dijete</div>
-                        <div className="font-medium">
-                          {firstName} {lastName}
-                        </div>
+                        <div className="font-medium">{firstName} {lastName}</div>
                       </div>
                       <div>
                         <div className="text-sm text-black/60">Trener</div>
@@ -1095,26 +1048,12 @@ export default function App() {
                       <div className="pt-4">
                         <div className="text-sm text-black/60">Upute za uplatu (virman / mobilno bankarstvo)</div>
                         <ul className="text-sm leading-7">
-                          <li>
-                            <span className="font-medium">Primatelj:</span> {CONFIG.clubName}
-                          </li>
-                          <li>
-                            <span className="font-medium">IBAN:</span> {CONFIG.iban}
-                          </li>
-                          {CONFIG.paymentModel && (
-                            <li>
-                              <span className="font-medium">Model:</span> {CONFIG.paymentModel}
-                            </li>
-                          )}
-                          <li>
-                            <span className="font-medium">Poziv na broj:</span> {referenceNumber}
-                          </li>
-                          <li>
-                            <span className="font-medium">Opis uplate:</span> {orderId} – {firstName} {lastName}
-                          </li>
-                          <li>
-                            <span className="font-medium">Iznos:</span> {formatCurrency(total)}
-                          </li>
+                          <li><span className="font-medium">Primatelj:</span> {CONFIG.clubName}</li>
+                          <li><span className="font-medium">IBAN:</span> {CONFIG.iban}</li>
+                          {CONFIG.paymentModel && (<li><span className="font-medium">Model:</span> {CONFIG.paymentModel}</li>)}
+                          <li><span className="font-medium">Poziv na broj:</span> {referenceNumber}</li>
+                          <li><span className="font-medium">Opis uplate:</span> {orderId} – {firstName} {lastName}</li>
+                          <li><span className="font-medium">Iznos:</span> {formatCurrency(total)}</li>
                         </ul>
                       </div>
                       <div className="flex gap-3">
@@ -1130,8 +1069,8 @@ export default function App() {
                       </div>
 
                       <div className="text-xs text-black/60 text-center max-w-xs">
-                        Skeniraj HUB 2D (PDF417) kod u mobilnoj aplikaciji. Ako skeniranje ne prepozna sve podatke, upiši IBAN i iznos ručno, a u opis
-                        dodaj broj narudžbe.
+                        Skeniraj HUB 2D (PDF417) kod u mobilnoj aplikaciji. Ako skeniranje ne prepozna sve podatke,
+                        upiši IBAN i iznos ručno, a u opis dodaj broj narudžbe. 
                       </div>
                       <details className="text-xs text-black/60">
                         <summary className="cursor-pointer">Prikaži HUB 2D (tekstualni payload)</summary>
@@ -1139,7 +1078,7 @@ export default function App() {
                       </details>
                     </div>
                   </div>
-                </Card>
+                </Card> 
               </div>
             </motion.section>
           )}

@@ -1,9 +1,7 @@
 "use client";
-
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import bwipjs from "bwip-js";
-
 // =============================================================
 // KONFIGURACIJA
 // =============================================================
@@ -20,7 +18,6 @@ const CONFIG = {
   emailWebhook: "",
   deliveryLeadTimeDays: 30,
   theme: { primary: "#0A2A6B", dark: "#0B0E11" },
-  sizes: ["116", "128", "140", "152", "164", "S", "M", "L", "XL"],
   products: {
     packages: [
       {
@@ -41,14 +38,14 @@ const CONFIG = {
       },
     ],
     extras: [
-      { id: "E_SHIRTS", label: "+2 majice", price: 20, image: "/majice2.jpg", sizes: ["116","128","140","152","164","S","M","L","XL"] },
-      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 45, image: "/hoodica_plava.jpg", sizes: ["116","128","140","152","164","S","M","L","XL"] },
-      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 45, image: "/hoodica_crna.jpg", sizes: ["116","128","140","152","164","S","M","L","XL"] },
+      { id: "E_SHIRTS", label: "+2 majice", price: 20, image: "/majice2.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
+      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 45, image: "/hoodica_plava.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
+      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 45, image: "/hoodica_crna.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
       { id: "E_BACKPACK", label: "Ruksak", price: 35, image: "/ruksak.jpg" }, // bez sizes
+      { id: "E_WINTER_HAT", label: "Zimska kapa", price: 8, image: "/zimska_kapa.jpg" }, // bez sizes, jedna veličina
     ],
   },
 } as const;
-
 // =============================================================
 // TIPOVI
 // =============================================================
@@ -68,7 +65,12 @@ type Extra = {
   sizes?: ReadonlyArray<string>;
 };
 const Step = { Login: 0, Choose: 1, Extras: 2, Review: 3, Payment: 4 } as const;
-
+// =============================================================
+// VELIČINE PO TIPU
+// =============================================================
+const SHIRT_SIZES = ["110cm", "122cm", "134cm", "146cm", "158cm", "S", "M", "L", "XL", "2XL", "3XL"] as const;
+const HOODIE_SIZES = ["110cm", "122cm", "134cm", "146cm", "158cm", "S", "M", "L", "XL", "2XL", "3XL"] as const;
+const JERSEY_SIZES = ["110cm", "122cm", "134cm", "146cm", "158cm", "S", "M", "L", "XL", "2XL", "3XL", "4XL"] as const;
 // =============================================================
 // UTIL FUNKCIJE
 // =============================================================
@@ -79,7 +81,6 @@ function formatCurrency(amount: number) {
     return `${CONFIG.currency} ${amount.toFixed(2)}`;
   }
 }
-
 function sanitizeHubText(input: string) {
   let s = input
     .replaceAll("č", "c").replaceAll("ć", "c").replaceAll("š", "s").replaceAll("đ", "d").replaceAll("ž", "z")
@@ -88,7 +89,6 @@ function sanitizeHubText(input: string) {
   s = s.replace(/[^ -~]/g, "");
   return s;
 }
-
 function makeHub2DPayload(params: {
   amountEur: number;
   iban: string;
@@ -119,13 +119,11 @@ function makeHub2DPayload(params: {
     description,
   ].join("\n");
 }
-
 function effectiveImage(p: Pack, overrideA: string | null, overrideB: string | null) {
   if (p.id === "A" && overrideA) return overrideA;
   if (p.id === "B" && overrideB) return overrideB;
   return p.image;
 }
-
 function buildOrderEmail(params: {
   orderId: string;
   firstName: string;
@@ -156,18 +154,15 @@ function buildOrderEmail(params: {
   const html = `<pre style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace">${lines.join("\n")}</pre>`;
   return { to: CONFIG.notificationEmails, subject, text, html };
 }
-
 // Widen union → treat all extras as `Extra` (sizes?: ...)
 const EXTRAS: ReadonlyArray<Extra> = CONFIG.products.extras as ReadonlyArray<Extra>;
 const extrasById: Record<string, Extra> = Object.fromEntries(EXTRAS.map((e) => [e.id, e]));
 const extrasTotal = (selected: Set<string>) => Array.from(selected).reduce((s, id) => s + (extrasById[id]?.price || 0), 0);
-
 // =============================================================
 // KOMPONENTA
 // =============================================================
 export default function App() {
   const [step, setStep] = useState<number>(Step.Login);
-
   // PRIJAVA
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -176,7 +171,6 @@ export default function App() {
   const lastRef = useRef<HTMLInputElement | null>(null);
   const coachRef = useRef<HTMLInputElement | null>(null);
   const [activeField, setActiveField] = useState<"" | "first" | "last" | "coach">("");
-
   // ODABIR
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [pkgSizes, setPkgSizes] = useState<{ jersey: string; shirt: string; hoodie: string }>({
@@ -188,18 +182,14 @@ export default function App() {
   const [customImageB] = useState<string | null>(null);
   const [resolvedImageA, setResolvedImageA] = useState<string | null>(null);
   const [resolvedImageB, setResolvedImageB] = useState<string | null>(null);
-
   // DODATNI ARTIKLI
   const [selectedExtras, setSelectedExtras] = useState<Set<string>>(new Set());
   const [extraSizes, setExtraSizes] = useState<Record<string, string>>({}); // id -> size
-
   // MAIL (bez UI-a)
   const emailedRef = useRef(false);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-
   // UPLATA
   const [referenceNumber, setReferenceNumber] = useState("");
-
   // helper čekanje refova
   async function waitForRefs(getOk: () => boolean, timeoutMs = 1500, intervalMs = 50): Promise<void> {
     const start = Date.now();
@@ -212,18 +202,15 @@ export default function App() {
       tick();
     });
   }
-
   // barkod refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const barcodeRef = useRef<HTMLDivElement | null>(null);
-
   const handleCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
     canvasRef.current = node;
   }, []);
   const handleBarcodeRef = useCallback((node: HTMLDivElement | null) => {
     barcodeRef.current = node;
   }, []);
-
   // Scroll to top on each step change
   useEffect(() => {
     try {
@@ -232,7 +219,6 @@ export default function App() {
       window.scrollTo(0, 0);
     }
   }, [step]);
-
   // Fokus zaštita
   useEffect(() => {
     if (step !== Step.Login || !activeField) return;
@@ -246,7 +232,6 @@ export default function App() {
       } catch {}
     }
   });
-
   // Nađi slike u /public
   useEffect(() => {
     if (step !== Step.Choose) return;
@@ -270,14 +255,11 @@ export default function App() {
     if (!customImageA) chain(["/Paket1.jpg", "/paket1.jpg"], setResolvedImageA);
     if (!customImageB) chain(["/Paket2.jpg", "/paket2.jpg"], setResolvedImageB);
   }, [step, customImageA, customImageB]);
-
   const orderId = useMemo(
     () => `${CONFIG.paymentReferencePrefix}${new Date().toISOString().slice(0, 10)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
     []
   );
-
   const selectedPackage = useMemo(() => CONFIG.products.packages.find((p) => p.id === selectedPackageId) || null, [selectedPackageId]);
-
   const extrasWithSizesLabels = useMemo(() => {
     return Array.from(selectedExtras)
       .map((id) => {
@@ -288,14 +270,10 @@ export default function App() {
       })
       .filter(Boolean) as string[];
   }, [selectedExtras, extraSizes]);
-
   const total = useMemo(() => (selectedPackage ? selectedPackage.price + extrasTotal(selectedExtras) : 0), [selectedPackage, selectedExtras]);
-
   const canContinueFromLogin = firstName.trim().length >= 1 && lastName.trim().length >= 1 && coach.trim().length >= 1;
-
   const canConfirmPackage =
     Boolean(selectedPackage) && pkgSizes.jersey !== "" && pkgSizes.shirt !== "" && pkgSizes.hoodie !== "";
-
   // svi odabrani extras koji imaju sizes moraju imati veličinu
   const allExtrasSizedOk = useMemo(() => {
     for (const id of selectedExtras) {
@@ -304,7 +282,6 @@ export default function App() {
     }
     return true;
   }, [selectedExtras, extraSizes]);
-
   const hub2dPayload = useMemo(() => {
     if (!selectedPackage || !referenceNumber) return "";
     return makeHub2DPayload({
@@ -316,7 +293,6 @@ export default function App() {
       description: `oprema ${firstName} ${lastName}`,
     });
   }, [selectedPackage, total, firstName, lastName, referenceNumber]);
-
   // Dodjela poziva na broj
   useEffect(() => {
     if (step === Step.Payment && !referenceNumber) {
@@ -324,7 +300,6 @@ export default function App() {
       setReferenceNumber(String(rnd));
     }
   }, [step, referenceNumber]);
-
   // Crtanje PDF417
   useEffect(() => {
     if (step !== Step.Payment) return;
@@ -337,15 +312,12 @@ export default function App() {
       try {
         await waitForRefs(() => Boolean(canvasRef.current));
         if (cancelled) return;
-
         const canvas = canvasRef.current!;
         const container = barcodeRef.current;
-
         const w = 300, h = 150;
         canvas.style.display = "block";
         canvas.width = w;
         canvas.height = h;
-
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.fillStyle = "#ffffff";
@@ -355,7 +327,6 @@ export default function App() {
           container.style.display = "none";
           container.innerHTML = "";
         }
-
         await bwipjs.toCanvas(canvas, {
           bcid: "pdf417",
           text: hub2dPayload,
@@ -364,7 +335,6 @@ export default function App() {
           includetext: false,
           columns: 6,
         });
-
         console.info("[PDF417] nacrtan OK. payload len =", hub2dPayload.length);
       } catch (e) {
         console.error("[PDF417] refs nisu spremni:", e);
@@ -381,14 +351,11 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, [step, hub2dPayload]);
-
   // Automatsko slanje emaila + zapis u Google Sheet
   async function sendOrderNotification() {
     if (!selectedPackage) return;
     if (emailedRef.current) return;
-
     setEmailStatus("sending");
-
     try {
       // --- 1) Email (ako je uključen webhook) ---
       if (CONFIG.emailWebhook) {
@@ -405,18 +372,15 @@ export default function App() {
           total,
           referenceNumber,
         });
-
         await fetch(CONFIG.emailWebhook, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(email),
         });
       }
-
       // --- 2) Google Sheet zapis (GET + no-cors) ---
       const scriptUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
       const secret = import.meta.env.VITE_GOOGLE_SHEET_SECRET;
-
       if (scriptUrl) {
         const extrasJson = JSON.stringify(
           Array.from(selectedExtras).reduce<Record<string, string>>((acc, id) => {
@@ -425,7 +389,6 @@ export default function App() {
             return acc;
           }, {})
         );
-
         const params = new URLSearchParams({
           secret: secret || "",
           orderId,
@@ -443,13 +406,10 @@ export default function App() {
           iban: CONFIG.iban,
           model: CONFIG.paymentModel,
         });
-
         const fullUrl = `${scriptUrl}?${params.toString()}`;
         console.log("[Sheets] FULL GET URL ->", fullUrl);
-
         fetch(fullUrl, { method: "GET", mode: "no-cors" }).catch(() => {});
       }
-
       setEmailStatus("sent");
       emailedRef.current = true;
     } catch (e) {
@@ -457,7 +417,6 @@ export default function App() {
       setEmailStatus("error");
     }
   }
-
   // Poziv slanja na ulazu u korak Payment
   useEffect(() => {
     if (step === Step.Payment) {
@@ -469,7 +428,6 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, referenceNumber]);
-
   // --- DEV SMOKE TESTS ---
   useEffect(() => {
     try {
@@ -489,7 +447,6 @@ export default function App() {
       console.error("[Smoke] Basic runtime checks failed:", e);
     }
   }, []);
-
   // UI helpers
   const PrimaryButton = ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
@@ -522,7 +479,6 @@ export default function App() {
   const Card = ({ children }: { children: React.ReactNode }) => (
     <div className="rounded-2xl border border-black/10 shadow-sm overflow-hidden bg-white">{children}</div>
   );
-
   const PackageCard = ({ pkg }: { pkg: Pack }) => (
     <Card>
       <div className="grid grid-cols-1">
@@ -577,7 +533,6 @@ export default function App() {
       </div>
     </Card>
   );
-
   const ExtraCard = ({
     extra,
     checked,
@@ -626,7 +581,6 @@ export default function App() {
         >
           {checked ? "Ukloni" : "Dodaj"}
         </button>
-
         {checked && Array.isArray(extra.sizes) && (
           <Field id={`extra-size-${extra.id}`} label="Veličina">
             <select
@@ -644,7 +598,6 @@ export default function App() {
       </div>
     </div>
   );
-
   return (
     <div className="min-h-screen bg-white text-black selection:bg-black/10">
       {/* Header */}
@@ -665,7 +618,6 @@ export default function App() {
           <div className="text-xs text-black/60 pr-4">Privremena web stranica</div>
         </div>
       </header>
-
       {/* Main */}
       <main className="w-full px-0 py-8 pb-[max(7rem,env(safe-area-inset-bottom))]">
         <AnimatePresence mode="wait">
@@ -731,7 +683,6 @@ export default function App() {
                         />
                       </Field>
                     </div>
-
                     <div className="flex items-center justify-between mt-6">
                       <div className="text-sm text-black/60">Podaci se koriste samo za identifikaciju narudžbe.</div>
                       <PrimaryButton
@@ -748,7 +699,6 @@ export default function App() {
               </div>
             </motion.section>
           )}
-
           {/* ODABIR PAKETA */}
           {step === Step.Choose && (
             <motion.section
@@ -763,7 +713,6 @@ export default function App() {
                   Oprema – odaberi paket
                 </h2>
               </div>
-
               <div className="space-y-6 px-4">
                 {CONFIG.products.packages
                   .map((p) => ({ ...p, image: effectiveImage(p, customImageA ?? resolvedImageA, customImageB ?? resolvedImageB) }))
@@ -771,7 +720,6 @@ export default function App() {
                     <PackageCard key={p.id} pkg={p} />
                   ))}
               </div>
-
               <div className="mt-8 grid grid-cols-1 gap-4 px-4">
                 <Card>
                   <div className="p-5">
@@ -783,7 +731,7 @@ export default function App() {
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
                         >
                           <option value="" disabled>Odaberi veličinu</option>
-                          {CONFIG.sizes.map((s) => (<option key={s} value={s}>{s}</option>))}
+                          {JERSEY_SIZES.map((s) => (<option key={s} value={s}>{s}</option>))}
                         </select>
                       </Field>
                       <Field label="Veličina majice" id="shirt">
@@ -793,7 +741,7 @@ export default function App() {
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
                         >
                           <option value="" disabled>Odaberi veličinu</option>
-                          {CONFIG.sizes.map((s) => (<option key={s} value={s}>{s}</option>))}
+                          {SHIRT_SIZES.map((s) => (<option key={s} value={s}>{s}</option>))}
                         </select>
                       </Field>
                       <Field label="Veličina hoodice" id="hoodie">
@@ -803,16 +751,14 @@ export default function App() {
                           className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-black/10 bg-white"
                         >
                           <option value="" disabled>Odaberi veličinu</option>
-                          {CONFIG.sizes.map((s) => (<option key={s} value={s}>{s}</option>))}
+                          {HOODIE_SIZES.map((s) => (<option key={s} value={s}>{s}</option>))}
                         </select>
                       </Field>
-
                       <div className="md:justify-self-end">
                         <div className="text-sm text-black/60 mb-2">Cijena paketa</div>
                         <div className="text-2xl font-bold">{formatCurrency(selectedPackage?.price ?? 0)}</div>
                       </div>
                     </div>
-
                     <div className="flex items-center justify-between mt-6">
                       <OutlineButton onClick={() => setStep(Step.Login)}>Natrag</OutlineButton>
                       <PrimaryButton
@@ -829,7 +775,6 @@ export default function App() {
               </div>
             </motion.section>
           )}
-
           {/* DODATNI ARTIKLI */}
           {step === Step.Extras && (
             <motion.section
@@ -845,7 +790,6 @@ export default function App() {
                 </h2>
                 <p className="text-black/70 mt-1">Odaberi dodatne artikle. Ovaj korak možeš preskočiti.</p>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4">
                 {EXTRAS.map((ex) => (
                   <ExtraCard
@@ -875,7 +819,6 @@ export default function App() {
                   />
                 ))}
               </div>
-
               <div className="mt-8 grid grid-cols-1 gap-4 px-4">
                 <Card>
                   <div className="p-5">
@@ -899,7 +842,6 @@ export default function App() {
               </div>
             </motion.section>
           )}
-
           {/* REKAPITULACIJA */}
           {step === Step.Review && (
             <motion.section
@@ -915,7 +857,6 @@ export default function App() {
                 </h2>
                 <p className="text-black/70 mt-1">Provjeri podatke prije narudžbe.</p>
               </div>
-
               <div className="px-4">
                 <Card>
                   <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -993,7 +934,6 @@ export default function App() {
               </div>
             </motion.section>
           )}
-
           {/* UPLATA */}
           {step === Step.Payment && (
             <motion.section
@@ -1009,7 +949,6 @@ export default function App() {
                 </h2>
                 <p className="text-black/70 mt-1">Detalji narudžbe i 2D kod za brzu uplatu.</p>
               </div>
-
               <div className="px-4">
                 <Card>
                   <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -1061,16 +1000,14 @@ export default function App() {
                         <PrimaryButton onClick={() => (window as any).print()}>Ispis / PDF</PrimaryButton>
                       </div>
                     </div>
-
                     <div className="flex flex-col items-center gap-3">
                       <div className="rounded-2xl p-4 border border-black/10 shadow-sm barcode-surface" style={{ background: "#fff" }}>
                         <canvas ref={handleCanvasRef} className="block bg-white" style={{ width: 300, height: 150, background: "#fff" }} />
                         <div ref={handleBarcodeRef} style={{ width: 300, height: 150, display: "none", background: "#fff" }} />
                       </div>
-
                       <div className="text-xs text-black/60 text-center max-w-xs">
                         Skeniraj HUB 2D (PDF417) kod u mobilnoj aplikaciji. Ako skeniranje ne prepozna sve podatke,
-                        upiši IBAN i iznos ručno, a u opis dodaj broj narudžbe. 
+                        upiši IBAN i iznos ručno, a u opis dodaj broj narudžbe.
                       </div>
                       <details className="text-xs text-black/60">
                         <summary className="cursor-pointer">Prikaži HUB 2D (tekstualni payload)</summary>
@@ -1078,7 +1015,7 @@ export default function App() {
                       </details>
                     </div>
                   </div>
-                </Card> 
+                </Card>
               </div>
             </motion.section>
           )}

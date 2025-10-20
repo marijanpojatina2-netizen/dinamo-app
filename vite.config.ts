@@ -1,16 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import vercel from 'vite-plugin-vercel';  // Dodaj ovaj import
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), vercel()],
   build: {
-    chunkSizeWarningLimit: 1000, // Povećaj limit upozorenja sa 500kB na 1MB
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
-          // Splitaj velike deps u zasebne chunkove
-          vendor: ['react', 'react-dom', 'framer-motion'], // Dodaj svoje deps (npr. bwip-js)
-          bwip: ['bwip-js'], // Primjer za bwip-js
+          vendor: ['react', 'react-dom', 'framer-motion'],
+          bwip: ['bwip-js'],
         },
       },
     },

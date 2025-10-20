@@ -1,18 +1,20 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import vercel from 'vite-plugin-vercel';  // Dodaj ovaj import
+// @ts-ignore  // Ignoriraj TS error za fork bez punih tipova
 
 export default defineConfig({
-  plugins: [react(), vercel()],
-  build: {
-    chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'framer-motion'],
-          bwip: ['bwip-js'],
-        },
-      },
-    },
-  },
+plugins: [react(),
+// @ts-ignore  // Ignoriraj za korištenje vercel
+],
+build: {
+chunkSizeWarningLimit: 1000,
+rollupOptions: {
+output: {
+manualChunks: {
+vendor: ['react', 'react-dom', 'framer-motion'],
+bwip: ['bwip-js'],
+},
+},
+},
+},
 }); 

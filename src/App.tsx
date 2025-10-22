@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import bwipjs from "bwip-js";
+// @ts-ignore
 import { Analytics } from '@vercel/analytics/react';  // Koristi /react za plain React/Vite, ne /next
 // =============================================================
 // KONFIGURACIJA
@@ -160,7 +161,7 @@ const EXTRAS: ReadonlyArray<Extra> = CONFIG.products.extras as ReadonlyArray<Ext
 const extrasById: Record<string, Extra> = Object.fromEntries(EXTRAS.map((e) => [e.id, e]));
 const extrasTotal = (selected: Set<string>) => Array.from(selected).reduce((s, id) => s + (extrasById[id]?.price || 0), 0);
 // =============================================================
-// KOMPONENTA
+ // KOMPONENTA
 // =============================================================
 export default function App() {
   const [step, setStep] = useState<number>(Step.Login);
@@ -600,7 +601,7 @@ export default function App() {
     </div>
   );
   return (
-        <div className="min-h-screen bg-white text-black selection:bg-black/10">
+    <div className="min-h-screen bg-white text-black selection:bg-black/10">
       {/* Header */}
       <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white border-b border-black/10">
         <div className="w-full px-0 py-3 flex items-center justify-between">
@@ -697,7 +698,6 @@ export default function App() {
                     </div>
                   </form>
                 </Card>
-                <Analytics />
               </div>
             </motion.section>
           )}
@@ -1023,6 +1023,7 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+      <Analytics />  // Dodano ovdje, na kraju main-a
     </div>
   );
 }

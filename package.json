@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/analytics": "^1.5.0",
     "bwip-js": "^4.7.0",
     "framer-motion": "^12.23.12",
     "nodemailer": "^7.0.6",

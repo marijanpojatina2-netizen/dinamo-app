@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import bwipjs from "bwip-js";
+import { Analytics } from '@vercel/analytics/react';  // Koristi /react za plain React/Vite, ne /next
 // =============================================================
 // KONFIGURACIJA
 // =============================================================
@@ -599,7 +600,7 @@ export default function App() {
     </div>
   );
   return (
-    <div className="min-h-screen bg-white text-black selection:bg-black/10">
+        <div className="min-h-screen bg-white text-black selection:bg-black/10">
       {/* Header */}
       <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white border-b border-black/10">
         <div className="w-full px-0 py-3 flex items-center justify-between">
@@ -696,6 +697,7 @@ export default function App() {
                     </div>
                   </form>
                 </Card>
+                <Analytics />
               </div>
             </motion.section>
           )}

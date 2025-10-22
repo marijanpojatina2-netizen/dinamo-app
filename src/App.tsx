@@ -25,7 +25,7 @@ const CONFIG = {
       {
         id: "A",
         name: "Paket oprema Dinamo",
-        price: 110,
+        price:145,
         image: "/Paket1.jpg",
         includes: ["2 majice", "1 hoodica", "1 hlače", "1 double face dres"],
         spec: "Osnovni komplet za mlađe uzraste.",
@@ -33,7 +33,7 @@ const CONFIG = {
       {
         id: "B",
         name: "Paket oprema plus Dinamo",
-        price: 180,
+        price: 205,
         image: "/Paket2.jpg",
         includes: ["4 majice", "2 hoodice", "1 hlače", "1 double face dres"],
         spec: "Prošireni komplet za mlađe uzraste.",
@@ -41,8 +41,8 @@ const CONFIG = {
     ],
     extras: [
       { id: "E_SHIRTS", label: "+2 majice", price: 20, image: "/majice2.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
-      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 45, image: "/hoodica_plava.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
-      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 45, image: "/hoodica_crna.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
+      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 40, image: "/hoodica_plava.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
+      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 40, image: "/hoodica_crna.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
       { id: "E_BACKPACK", label: "Ruksak", price: 35, image: "/ruksak.jpg" }, // bez sizes
       { id: "E_WINTER_HAT", label: "Zimska kapa", price: 8, image: "/zimska_kapa.jpg" }, // bez sizes, jedna veličina
     ],

@@ -23,9 +23,17 @@ const CONFIG = {
   products: {
     packages: [
       {
+        id: "C",
+        name: "Paket oprema Dinamo BEZ",
+        price: 95,
+        image: "/Paket3.jpg",  // Pretpostavka, promijeni ako imaš drugu sliku
+        includes: ["2 majice", "1 hoodica", "1 hlače"],
+        spec: "Osnovni komplet za mlađe uzraste bez dresa.",
+      },
+      {
         id: "A",
         name: "Paket oprema Dinamo",
-        price:145,
+        price: 145,
         image: "/Paket1.jpg",
         includes: ["2 majice", "1 hoodica", "1 hlače", "1 double face dres"],
         spec: "Osnovni komplet za mlađe uzraste.",
@@ -41,8 +49,8 @@ const CONFIG = {
     ],
     extras: [
       { id: "E_SHIRTS", label: "+2 majice", price: 20, image: "/majice2.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
-      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 40, image: "/hoodica_plava.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
-      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 40, image: "/hoodica_crna.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
+      { id: "E_HOODIE_BLUE", label: "Hoodica plava", price: 45, image: "/hoodica_plava.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
+      { id: "E_HOODIE_BLACK", label: "Hoodica crna", price: 45, image: "/hoodica_crna.jpg", sizes: ["110cm","122cm","134cm","146cm","158cm","S","M","L","XL","2XL","3XL"] },
       { id: "E_BACKPACK", label: "Ruksak", price: 35, image: "/ruksak.jpg" }, // bez sizes
       { id: "E_WINTER_HAT", label: "Zimska kapa", price: 8, image: "/zimska_kapa.jpg" }, // bez sizes, jedna veličina
     ],
@@ -124,6 +132,7 @@ function makeHub2DPayload(params: {
 function effectiveImage(p: Pack, overrideA: string | null, overrideB: string | null) {
   if (p.id === "A" && overrideA) return overrideA;
   if (p.id === "B" && overrideB) return overrideB;
+  if (p.id === "C") return p.image;  // Dodano za novi paket
   return p.image;
 }
 function buildOrderEmail(params: {
@@ -161,7 +170,7 @@ const EXTRAS: ReadonlyArray<Extra> = CONFIG.products.extras as ReadonlyArray<Ext
 const extrasById: Record<string, Extra> = Object.fromEntries(EXTRAS.map((e) => [e.id, e]));
 const extrasTotal = (selected: Set<string>) => Array.from(selected).reduce((s, id) => s + (extrasById[id]?.price || 0), 0);
 // =============================================================
- // KOMPONENTA
+// KOMPONENTA
 // =============================================================
 export default function App() {
   const [step, setStep] = useState<number>(Step.Login);
